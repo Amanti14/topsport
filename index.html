@@ -6,7 +6,7 @@
 <title>hEY! Admin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+  
 </head>
 <body>
 
@@ -17,21 +17,40 @@
 </div>
 
 <div id="app" style="display:none;">
-  <div class="topbar">
-    <div class="logo-badge">hEY!</div>
-    <div class="brand">hEY<span>!</span> Admin</div>
-  </div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="logo-badge">hEY!</div>
+        <div class="brand">hEY<span>!</span> Admin</div>
+      </div>
+      <nav class="side-nav">
+        <div class="side-link active" data-tab="overview" onclick="switchTab('overview')"><span class="side-icon">📊</span>Overview</div>
+        <div class="side-link" data-tab="products" onclick="switchTab('products')"><span class="side-icon">📦</span>Products</div>
+        <div class="side-link" data-tab="bulk" onclick="switchTab('bulk')"><span class="side-icon">⬆️</span>Bulk Import</div>
+        <div class="side-link" data-tab="categories" onclick="switchTab('categories')"><span class="side-icon">🏷️</span>Categories</div>
+        <div class="side-link" data-tab="orders" onclick="switchTab('orders')"><span class="side-icon">🧾</span>Orders</div>
+        <div class="side-link" data-tab="settings" onclick="switchTab('settings')"><span class="side-icon">⚙️</span>Store</div>
+      </nav>
+    </aside>
 
-  <div class="tabs">
-    <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
-    <div class="tab" data-tab="products" onclick="switchTab('products')">Products</div>
-    <div class="tab" data-tab="bulk" onclick="switchTab('bulk')">Bulk Import</div>
-    <div class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</div>
-    <div class="tab" data-tab="orders" onclick="switchTab('orders')">Orders</div>
-    <div class="tab" data-tab="settings" onclick="switchTab('settings')">Store</div>
-  </div>
+    <div class="main-col">
+      <div class="topbar mobile-only">
+        <div class="logo-badge">hEY!</div>
+        <div class="brand">hEY<span>!</span> Admin</div>
+      </div>
 
-  <div class="content" id="content"></div>
+      <div class="tabs mobile-only">
+        <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
+        <div class="tab" data-tab="products" onclick="switchTab('products')">Products</div>
+        <div class="tab" data-tab="bulk" onclick="switchTab('bulk')">Bulk Import</div>
+        <div class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</div>
+        <div class="tab" data-tab="orders" onclick="switchTab('orders')">Orders</div>
+        <div class="tab" data-tab="settings" onclick="switchTab('settings')">Store</div>
+      </div>
+
+      <div class="content" id="content"></div>
+    </div>
+  </div>
   <button class="fab" id="fab" style="display:none;" onclick="openProductForm()">+</button>
 </div>
 
@@ -91,6 +110,7 @@ async function persist(){
 function switchTab(tab){
   activeTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('.side-link').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   document.getElementById('fab').style.display = (tab==='products') ? 'block' : 'none';
   render();
 }
@@ -113,10 +133,10 @@ function overviewHtml(){
   const revenue = store.orders.filter(o=>o.status!=='cancelled').reduce((s,o)=>s+o.total,0);
   return `
     <div class="stat-grid">
-      <div class="stat"><div class="num">${totalProducts}</div><div class="label">Products</div></div>
-      <div class="stat"><div class="num">${pendingOrders}</div><div class="label">Pending Orders</div></div>
-      <div class="stat"><div class="num">${lowStock}</div><div class="label">Low Stock (≤3)</div></div>
-      <div class="stat"><div class="num">${revenue}</div><div class="label">Total Revenue (ETB)</div></div>
+      <div class="stat"><div class="stat-icon">📦</div><div class="num">${totalProducts}</div><div class="label">Products</div></div>
+      <div class="stat"><div class="stat-icon">🧾</div><div class="num">${pendingOrders}</div><div class="label">Pending Orders</div></div>
+      <div class="stat"><div class="stat-icon">⚠️</div><div class="num">${lowStock}</div><div class="label">Low Stock (≤3)</div></div>
+      <div class="stat"><div class="stat-icon">💰</div><div class="num">${revenue}</div><div class="label">Total Revenue (ETB)</div></div>
     </div>
     <div class="card"><div class="row"><strong>Recent Orders</strong></div></div>
     ${store.orders.slice(0,5).map(orderRowHtml).join('') || '<div class="card">No orders yet.</div>'}
