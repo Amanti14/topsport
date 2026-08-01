@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>hEY! Admin</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  
+</style>
+</head>
+<body>
+
+<div id="lockScreen" class="lock-screen">
+  <div class="logo-badge" style="width:64px;height:64px;font-size:20px;">hEY!</div>
+  <h2 style="margin-top:8px;">Checking access…</h2>
+  <p style="color:var(--text-soft);font-size:13px;" id="lockMsg">Verifying your Telegram account</p>
+</div>
+
+<div id="app" style="display:none;">
+  <div class="topbar">
+    <div class="logo-badge">hEY!</div>
+    <div class="brand">hEY<span>!</span> Admin</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
+    <div class="tab" data-tab="products" onclick="switchTab('products')">Products</div>
+    <div class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</div>
+    <div class="tab" data-tab="orders" onclick="switchTab('orders')">Orders</div>
+    <div class="tab" data-tab="settings" onclick="switchTab('settings')">Store</div>
+  </div>
+
+  <div class="content" id="content"></div>
+  <button class="fab" id="fab" style="display:none;" onclick="openProductForm()">+</button>
+</div>
+
+<div class="sheet-overlay" id="sheetOverlay" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"><div class="sheet-handle"></div><div id="sheetContent"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+tg?.ready(); tg?.expand();
+
+// ==== CONFIGURE THIS ====
+const API_BASE = "https://hey-market.amantifekede14.workers.dev/"; // same worker URL as the customer app
+// =========================
+
+let store = { categories: [], products: [], orders: [], payment:{methods:[]}, shipping:{options:[]}, store:{}, theme:{} };
+let activeTab = 'overview';
+let currentUser = null;
+
+async function init(){
+  const initData = tg?.initData || '';
+  try{
+    const res = await fetch(`${API_BASE}/api/admin/verify`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({initData})
+    });
+    const data = await res.json();
+    if(!data.ok){
+      document.getElementById('lockMsg').textContent = "You're not authorized to access this dashboard.";
+      return;
+    }
+    currentUser = data.user;
+    document.getElementById('lockScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    await loadStore();
+  }catch(e){
+    document.getElementById('lockMsg').textContent = "Couldn't connect. Check the worker URL / your connection.";
+  }
+}
+init();
+
+async function loadStore(){
+  const res = await fetch(`${API_BASE}/api/store`);
+  store = await res.json();
+  render();
+}
+
+async function persist(){
+  const res = await fetch(`${API_BASE}/api/admin/store`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ initData: tg?.initData || '', store })
+  });
+  const data = await res.json();
+  if(!data.ok) showToast('Save failed — try again');
+  return data.ok;
+}
+
+function switchTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+  document.getElementById('fab').style.display = (tab==='products') ? 'block' : 'none';
+  render();
+}
+
+function render(){
+  const c = document.getElementById('content');
+  if(activeTab==='overview') c.innerHTML = overviewHtml();
+  else if(activeTab==='products') c.innerHTML = productsHtml();
+  else if(activeTab==='categories') c.innerHTML = categoriesHtml();
+  else if(activeTab==='orders') c.innerHTML = ordersHtml();
+  else if(activeTab==='settings') c.innerHTML = settingsHtml();
+}
+
+// ---- Overview ----
+function overviewHtml(){
+  const totalProducts = store.products.length;
+  const lowStock = store.products.filter(p=>p.stock<=3).length;
+  const pendingOrders = store.orders.filter(o=>o.status==='pending').length;
+  const revenue = store.orders.filter(o=>o.status!=='cancelled').reduce((s,o)=>s+o.total,0);
+  return `
+    <div class="stat-grid">
+      <div class="stat"><div class="num">${totalProducts}</div><div class="label">Products</div></div>
+      <div class="stat"><div class="num">${pendingOrders}</div><div class="label">Pending Orders</div></div>
+      <div class="stat"><div class="num">${lowStock}</div><div class="label">Low Stock (≤3)</div></div>
+      <div class="stat"><div class="num">${revenue}</div><div class="label">Total Revenue (ETB)</div></div>
+    </div>
+    <div class="card"><div class="row"><strong>Recent Orders</strong></div></div>
+    ${store.orders.slice(0,5).map(orderRowHtml).join('') || '<div class="card">No orders yet.</div>'}
+  `;
+}
+
+// ---- Products ----
+function productsHtml(){
+  if(store.products.length===0) return `<div class="card">No products yet. Tap + to add one.</div>`;
+  return store.products.map(p => `
+    <div class="card">
+      <div class="prod-row">
+        ${p.image ? `<img src="${p.image}">` : `<div class="noimg">📦</div>`}
+        <div class="prod-info">
+          <div class="prod-name">${p.name}</div>
+          <div class="prod-meta">${p.price} ETB · ${p.stock} in stock · ${categoryName(p.categoryId)}</div>
+        </div>
+        <button class="icon-sm" onclick="openProductForm('${p.id}')">✏️</button>
+        <button class="icon-sm danger" onclick="deleteProduct('${p.id}')">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+function categoryName(id){ return store.categories.find(c=>c.id===id)?.name || '—'; }
+
+function openProductForm(id){
+  const p = id ? store.products.find(x=>x.id===id) : null;
+  const catOptions = store.categories.map(c=>`<option value="${c.id}" ${p?.categoryId===c.id?'selected':''}>${c.name}</option>`).join('');
+  document.getElementById('sheetContent').innerHTML = `
+    <div class="sheet-body">
+      <div class="sheet-title">${p ? 'Edit Product' : 'Add Product'}</div>
+      <div class="field"><label>Name</label><input id="pfName" value="${p?.name||''}" placeholder="e.g. PS5 Digital Edition"></div>
+      <div class="field"><label>Category</label><select id="pfCat">${catOptions}</select></div>
+      <div class="field"><label>Price (ETB)</label><input id="pfPrice" type="number" value="${p?.price||''}"></div>
+      <div class="field"><label>Stock Quantity</label><input id="pfStock" type="number" value="${p?.stock??''}"></div>
+      <div class="field"><label>Image URL</label><input id="pfImage" value="${p?.image||''}" placeholder="https://..."></div>
+      <div class="field"><label>Description</label><textarea id="pfDesc" rows="3">${p?.description||''}</textarea></div>
+      <button class="btn-primary" onclick="saveProduct(${p?`'${p.id}'`:'null'})">Save Product</button>
+    </div>`;
+  openSheet();
+}
+async function saveProduct(id){
+  const name = document.getElementById('pfName').value.trim();
+  const categoryId = document.getElementById('pfCat').value;
+  const price = Number(document.getElementById('pfPrice').value);
+  const stock = Number(document.getElementById('pfStock').value);
+  const image = document.getElementById('pfImage').value.trim();
+  const description = document.getElementById('pfDesc').value.trim();
+  if(!name || !price){ showToast('Name and price are required'); return; }
+
+  if(id){
+    const p = store.products.find(x=>x.id===id);
+    Object.assign(p, {name, categoryId, price, stock, image, description});
+  } else {
+    store.products.push({ id: 'p_'+Date.now(), name, categoryId, price, stock, image, description });
+  }
+  const ok = await persist();
+  if(ok){ closeSheet(); render(); showToast('Product saved'); }
+}
+async function deleteProduct(id){
+  store.products = store.products.filter(p=>p.id!==id);
+  const ok = await persist();
+  if(ok){ render(); showToast('Product deleted'); }
+}
+
+// ---- Categories ----
+function categoriesHtml(){
+  const rows = store.categories.map(c => `
+    <div class="card">
+      <div class="row">
+        <div><span style="font-size:18px;margin-right:8px;">${c.icon||'🛍️'}</span><strong>${c.name}</strong></div>
+        <button class="icon-sm danger" onclick="deleteCategory('${c.id}')">🗑️</button>
+      </div>
+    </div>`).join('');
+  return `${rows}
+    <div class="card">
+      <div class="sheet-title" style="font-size:14px;">Add Category</div>
+      <div class="field"><label>Name</label><input id="catName" placeholder="e.g. Laptops"></div>
+      <div class="field"><label>Emoji Icon</label><input id="catIcon" placeholder="💻"></div>
+      <button class="btn-primary" onclick="addCategory()">Add Category</button>
+    </div>`;
+}
+async function addCategory(){
+  const name = document.getElementById('catName').value.trim();
+  const icon = document.getElementById('catIcon').value.trim() || '🛍️';
+  if(!name){ showToast('Category name required'); return; }
+  store.categories.push({ id: 'c_'+Date.now(), name, icon });
+  const ok = await persist();
+  if(ok){ render(); showToast('Category added'); }
+}
+async function deleteCategory(id){
+  store.categories = store.categories.filter(c=>c.id!==id);
+  const ok = await persist();
+  if(ok){ render(); showToast('Category removed'); }
+}
+
+// ---- Orders ----
+function ordersHtml(){
+  if(store.orders.length===0) return `<div class="card">No orders yet.</div>`;
+  return store.orders.map(orderRowHtml).join('');
+}
+function orderRowHtml(o){
+  return `<div class="card" onclick="openOrderDetail('${o.id}')">
+    <div class="row">
+      <strong style="font-size:13px;">${o.customerName}</strong>
+      <span class="status-pill status-${o.status}">${o.status}</span>
+    </div>
+    <div class="prod-meta" style="margin-top:4px;">${o.items.length} item(s) · ${o.total} ETB · ${new Date(o.createdAt).toLocaleString()}</div>
+  </div>`;
+}
+function openOrderDetail(id){
+  const o = store.orders.find(x=>x.id===id);
+  const itemsHtml = o.items.map(i=>`<div class="row" style="padding:6px 0;font-size:13px;"><span>${i.name} x${i.qty}</span><span>${i.price*i.qty} ETB</span></div>`).join('');
+  const statuses = ['pending','confirmed','delivered','cancelled'];
+  document.getElementById('sheetContent').innerHTML = `
+    <div class="sheet-body">
+      <div class="sheet-title">Order Details</div>
+      <div class="field"><label>Customer</label><input value="${o.customerName}" disabled></div>
+      <div class="field"><label>Phone</label><input value="${o.customerPhone}" disabled></div>
+      ${o.note ? `<div class="field"><label>Note</label><input value="${o.note}" disabled></div>` : ''}
+      <div class="field"><label>Items</label>${itemsHtml}</div>
+      <div class="row" style="font-weight:700;padding:10px 0;border-top:1px solid var(--border);"><span>Total</span><span>${o.total} ETB</span></div>
+      <div class="field"><label>Update Status</label>
+        <select id="ordStatus">${statuses.map(s=>`<option value="${s}" ${o.status===s?'selected':''}>${s}</option>`).join('')}</select>
+      </div>
+      <button class="btn-primary" onclick="updateOrderStatus('${o.id}')">Update Status</button>
+    </div>`;
+  openSheet();
+}
+async function updateOrderStatus(id){
+  const o = store.orders.find(x=>x.id===id);
+  o.status = document.getElementById('ordStatus').value;
+  const ok = await persist();
+  if(ok){ closeSheet(); render(); showToast('Order updated'); }
+}
+
+// ---- Settings ----
+function settingsHtml(){
+  const s = store.store || {};
+  return `<div class="card">
+    <div class="field"><label>Store Name</label><input id="stName" value="${s.name||''}"></div>
+    <div class="field"><label>Tagline</label><input id="stTagline" value="${s.tagline||''}"></div>
+    <button class="btn-primary" onclick="saveSettings()">Save Store Info</button>
+  </div>
+  <div class="card">
+    <div class="sheet-title" style="font-size:14px;">Payment Methods</div>
+    ${(store.payment.methods||[]).map((m,i)=>`
+      <div class="field">
+        <label>Method Name</label><input value="${m.name}" onchange="store.payment.methods[${i}].name=this.value">
+        <label style="margin-top:6px;">Details</label><input value="${m.details}" onchange="store.payment.methods[${i}].details=this.value">
+      </div>`).join('')}
+    <button class="btn-primary" onclick="persist().then(()=>showToast('Payment methods saved'))">Save Payment Methods</button>
+  </div>`;
+}
+async function saveSettings(){
+  store.store = store.store || {};
+  store.store.name = document.getElementById('stName').value.trim();
+  store.store.tagline = document.getElementById('stTagline').value.trim();
+  const ok = await persist();
+  if(ok) showToast('Store info saved');
+}
+
+// ---- Sheet helpers ----
+function openSheet(){ document.getElementById('sheetOverlay').classList.add('open'); document.getElementById('sheet').classList.add('open'); }
+function closeSheet(){ document.getElementById('sheetOverlay').classList.remove('open'); document.getElementById('sheet').classList.remove('open'); }
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display='block';
+  clearTimeout(window._t); window._t = setTimeout(()=>{t.style.display='none';}, 2000);
+}
+</script>
+</body>
+</html>
