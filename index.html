@@ -7,9 +7,7 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<style>
-  
-</style>
+
 </head>
 <body>
 
@@ -46,7 +44,7 @@ const tg = window.Telegram?.WebApp;
 tg?.ready(); tg?.expand();
 
 // ==== CONFIGURE THIS ====
-const API_BASE = "https://hey-market.amantifekede14.workers.dev/"; // same worker URL as the customer app
+const API_BASE = "https://hey-market.amantifekede14.workers.dev"; // same worker URL as the customer app — no trailing slash!
 // =========================
 
 let store = { categories: [], products: [], orders: [], payment:{methods:[]}, shipping:{options:[]}, store:{}, theme:{} };
