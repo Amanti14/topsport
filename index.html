@@ -7,7 +7,6 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-
 </head>
 <body>
 
@@ -26,6 +25,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
     <div class="tab" data-tab="products" onclick="switchTab('products')">Products</div>
+    <div class="tab" data-tab="bulk" onclick="switchTab('bulk')">Bulk Import</div>
     <div class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</div>
     <div class="tab" data-tab="orders" onclick="switchTab('orders')">Orders</div>
     <div class="tab" data-tab="settings" onclick="switchTab('settings')">Store</div>
@@ -99,6 +99,7 @@ function render(){
   const c = document.getElementById('content');
   if(activeTab==='overview') c.innerHTML = overviewHtml();
   else if(activeTab==='products') c.innerHTML = productsHtml();
+  else if(activeTab==='bulk') c.innerHTML = bulkImportHtml();
   else if(activeTab==='categories') c.innerHTML = categoriesHtml();
   else if(activeTab==='orders') c.innerHTML = ordersHtml();
   else if(activeTab==='settings') c.innerHTML = settingsHtml();
@@ -139,6 +140,94 @@ function productsHtml(){
     </div>`).join('');
 }
 function categoryName(id){ return store.categories.find(c=>c.id===id)?.name || '—'; }
+
+// ---- Bulk Import ----
+let bulkParsed = [];
+function bulkImportHtml(){
+  const catList = store.categories.map(c=>c.name).join(', ') || '(none yet — add categories first)';
+  return `
+    <div class="card">
+      <div class="sheet-title" style="font-size:15px;">Bulk Import Products</div>
+      <p style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px;line-height:1.5;">
+        One product per line, fields separated by <strong>|</strong>:<br>
+        <code style="font-size:11.5px;">Name | Category | Price | Stock | Image URL | Description</code><br><br>
+        Image URL and Description are optional (leave blank between pipes). Category must match one of your existing categories exactly: <strong>${catList}</strong>
+      </p>
+      <div class="field">
+        <textarea id="bulkText" rows="8" placeholder="PS5 Digital Edition | PS5 | 45000 | 5 | | Latest slim model
+iPhone 13 128GB | iPhones | 38000 | 3 | https://example.com/img.jpg | Unlocked, good condition"></textarea>
+      </div>
+      <button class="btn-primary" onclick="previewBulkImport()">Preview</button>
+    </div>
+    <div id="bulkPreview"></div>
+  `;
+}
+
+function previewBulkImport(){
+  const raw = document.getElementById('bulkText').value;
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  bulkParsed = [];
+  const errors = [];
+
+  lines.forEach((line, idx) => {
+    const parts = line.split('|').map(p=>p.trim());
+    const [name, catName, priceStr, stockStr, image, description] = parts;
+    if(!name || !catName || !priceStr){
+      errors.push(`Line ${idx+1}: missing name, category, or price — skipped`);
+      return;
+    }
+    const cat = store.categories.find(c=>c.name.toLowerCase()===catName.toLowerCase());
+    if(!cat){
+      errors.push(`Line ${idx+1}: category "${catName}" not found — skipped`);
+      return;
+    }
+    const price = Number(priceStr);
+    if(!Number.isFinite(price)){
+      errors.push(`Line ${idx+1}: invalid price "${priceStr}" — skipped`);
+      return;
+    }
+    const stock = Number.isFinite(Number(stockStr)) ? Number(stockStr) : 0;
+    bulkParsed.push({
+      id: 'p_' + Date.now() + '_' + idx,
+      name, categoryId: cat.id, price, stock,
+      image: image || '', description: description || ''
+    });
+  });
+
+  const preview = document.getElementById('bulkPreview');
+  const rows = bulkParsed.map(p => `
+    <div class="prod-row" style="padding:8px 0;border-bottom:1px solid var(--border);">
+      ${p.image ? `<img src="${p.image}">` : `<div class="noimg">📦</div>`}
+      <div class="prod-info">
+        <div class="prod-name">${p.name}</div>
+        <div class="prod-meta">${p.price} ETB · ${p.stock} in stock · ${categoryName(p.categoryId)}</div>
+      </div>
+    </div>`).join('');
+  const errorBlock = errors.length ? `<div class="card" style="border-color:var(--danger);"><strong style="color:var(--danger);font-size:13px;">${errors.length} line(s) skipped:</strong><div style="font-size:12px;color:var(--text-soft);margin-top:6px;">${errors.join('<br>')}</div></div>` : '';
+
+  preview.innerHTML = `
+    ${errorBlock}
+    <div class="card">
+      <strong style="font-size:13px;">${bulkParsed.length} product(s) ready to import</strong>
+      ${rows}
+      ${bulkParsed.length ? `<button class="btn-primary" onclick="confirmBulkImport()">Import ${bulkParsed.length} Product(s)</button>` : ''}
+    </div>
+  `;
+}
+
+async function confirmBulkImport(){
+  if(bulkParsed.length === 0) return;
+  store.products.push(...bulkParsed);
+  const ok = await persist();
+  if(ok){
+    const count = bulkParsed.length;
+    bulkParsed = [];
+    document.getElementById('bulkText').value = '';
+    document.getElementById('bulkPreview').innerHTML = '';
+    switchTab('products');
+    showToast(`${count} products imported`);
+  }
+}
 
 function openProductForm(id){
   const p = id ? store.products.find(x=>x.id===id) : null;
