@@ -6,7 +6,7 @@
 <title>hEY! Admin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">  
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
@@ -77,10 +77,29 @@ async function init(){
 init();
 
 async function loadStore(){
-  const res = await fetch(`${API_BASE}/api/store`);
-  store = await res.json();
-  renderStats();
-  render();
+  try{
+    const res = await fetch(`${API_BASE}/api/store`);
+    store = normalizeStore(await res.json());
+    renderStats();
+    render();
+  }catch(e){
+    document.getElementById('content').innerHTML = `<div class="card" style="border-color:var(--danger);">Couldn't load store data: ${e.message}. Check the worker URL and that it's deployed.</div>`;
+  }
+}
+
+// Guards against corrupted or partial data saved to KV (missing fields, wrong types)
+// so the app never silently crashes and shows a blank screen.
+function normalizeStore(s){
+  s = s && typeof s === 'object' ? s : {};
+  return {
+    store: s.store && typeof s.store === 'object' ? s.store : {},
+    theme: s.theme && typeof s.theme === 'object' ? s.theme : {},
+    categories: Array.isArray(s.categories) ? s.categories : [],
+    products: Array.isArray(s.products) ? s.products : [],
+    orders: Array.isArray(s.orders) ? s.orders : [],
+    payment: { methods: Array.isArray(s.payment?.methods) ? s.payment.methods : [] },
+    shipping: { options: Array.isArray(s.shipping?.options) ? s.shipping.options : [] },
+  };
 }
 
 async function persist(){
@@ -113,12 +132,16 @@ function renderStats(){
 
 function render(){
   const c = document.getElementById('content');
-  if(activeTab==='products') c.innerHTML = productsHtml();
-  else if(activeTab==='addProduct') c.innerHTML = addProductHtml();
-  else if(activeTab==='bulk') c.innerHTML = bulkImportHtml();
-  else if(activeTab==='categories') c.innerHTML = categoriesHtml();
-  else if(activeTab==='orders') c.innerHTML = ordersHtml();
-  else if(activeTab==='settings') c.innerHTML = settingsHtml();
+  try{
+    if(activeTab==='products') c.innerHTML = productsHtml();
+    else if(activeTab==='addProduct') c.innerHTML = addProductHtml();
+    else if(activeTab==='bulk') c.innerHTML = bulkImportHtml();
+    else if(activeTab==='categories') c.innerHTML = categoriesHtml();
+    else if(activeTab==='orders') c.innerHTML = ordersHtml();
+    else if(activeTab==='settings') c.innerHTML = settingsHtml();
+  }catch(e){
+    c.innerHTML = `<div class="card" style="border-color:var(--danger);">Something went wrong loading this tab: ${e.message}</div>`;
+  }
 }
 
 // ---- Products ----
