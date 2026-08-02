@@ -1,4 +1,4 @@
-:root{
+ :root{
     --primary:#179BD9; --primary-dark:#1180B3; --bg:#FFFFFF; --surface:#F4FAFD;
     --text:#0F2A3D; --text-soft:#6C8A9C; --border:#E4EFF4; --radius:16px;
     --danger:#D9534F; --success:#3CB878;
@@ -63,4 +63,4 @@
 
   .lock-screen{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:1000;text-align:center;padding:20px;}
   code{background:var(--surface);padding:2px 6px;border-radius:6px;font-family:monospace;}
-  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;z-index:200;display:none;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:14px;font-size:12.5px;z-index:200;display:none;max-width:88vw;text-align:center;line-height:1.4;}
