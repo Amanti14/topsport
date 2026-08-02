@@ -6,7 +6,7 @@
 <title>hEY! Admin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css">  
 </head>
 <body>
 
@@ -17,42 +17,26 @@
 </div>
 
 <div id="app" style="display:none;">
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="sidebar-brand">
-        <div class="logo-badge">hEY!</div>
-        <div class="brand">hEY<span>!</span> Admin</div>
-      </div>
-      <nav class="side-nav">
-        <div class="side-link active" data-tab="overview" onclick="switchTab('overview')"><span class="side-icon">📊</span>Overview</div>
-        <div class="side-link" data-tab="products" onclick="switchTab('products')"><span class="side-icon">📦</span>Products</div>
-        <div class="side-link" data-tab="addProduct" onclick="switchTab('addProduct')"><span class="side-icon">➕</span>Add Product</div>
-        <div class="side-link" data-tab="bulk" onclick="switchTab('bulk')"><span class="side-icon">⬆️</span>Bulk Import</div>
-        <div class="side-link" data-tab="categories" onclick="switchTab('categories')"><span class="side-icon">🏷️</span>Categories</div>
-        <div class="side-link" data-tab="orders" onclick="switchTab('orders')"><span class="side-icon">🧾</span>Orders</div>
-        <div class="side-link" data-tab="settings" onclick="switchTab('settings')"><span class="side-icon">⚙️</span>Store</div>
-      </nav>
-    </aside>
-
-    <div class="main-col">
-      <div class="topbar mobile-only">
-        <div class="logo-badge">hEY!</div>
-        <div class="brand">hEY<span>!</span> Admin</div>
-      </div>
-
-      <div class="tabs mobile-only">
-        <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
-        <div class="tab" data-tab="products" onclick="switchTab('products')">Products</div>
-        <div class="tab" data-tab="addProduct" onclick="switchTab('addProduct')">+ Add Product</div>
-        <div class="tab" data-tab="bulk" onclick="switchTab('bulk')">Bulk Import</div>
-        <div class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</div>
-        <div class="tab" data-tab="orders" onclick="switchTab('orders')">Orders</div>
-        <div class="tab" data-tab="settings" onclick="switchTab('settings')">Store</div>
-      </div>
-
-      <div class="content" id="content"></div>
+  <div class="header">
+    <div class="header-row">
+      <div class="logo-badge">hEY!</div>
+      <div class="brand">hEY<span>!</span> Admin</div>
     </div>
+    <div class="tagline">Manage your online market for gaming &amp; electronics</div>
   </div>
+
+  <div class="stat-grid" id="statGrid"></div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="products" onclick="switchTab('products')">📦 Products</div>
+    <div class="tab" data-tab="addProduct" onclick="switchTab('addProduct')">➕ Add Product</div>
+    <div class="tab" data-tab="orders" onclick="switchTab('orders')">🧾 Orders</div>
+    <div class="tab" data-tab="bulk" onclick="switchTab('bulk')">⬆️ Bulk Import</div>
+    <div class="tab" data-tab="categories" onclick="switchTab('categories')">🏷️ Categories</div>
+    <div class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ Store</div>
+  </div>
+
+  <div class="content" id="content"></div>
 </div>
 
 <div class="sheet-overlay" id="sheetOverlay" onclick="closeSheet()"></div>
@@ -68,7 +52,7 @@ const API_BASE = "https://hey-market.amantifekede14.workers.dev"; // same worker
 // =========================
 
 let store = { categories: [], products: [], orders: [], payment:{methods:[]}, shipping:{options:[]}, store:{}, theme:{} };
-let activeTab = 'overview';
+let activeTab = 'products';
 let currentUser = null;
 
 async function init(){
@@ -95,6 +79,7 @@ init();
 async function loadStore(){
   const res = await fetch(`${API_BASE}/api/store`);
   store = await res.json();
+  renderStats();
   render();
 }
 
@@ -105,41 +90,35 @@ async function persist(){
   });
   const data = await res.json();
   if(!data.ok) showToast('Save failed — try again');
+  renderStats();
   return data.ok;
 }
 
 function switchTab(tab){
   activeTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
-  document.querySelectorAll('.side-link').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   render();
+}
+
+function renderStats(){
+  const totalProducts = store.products.length;
+  const totalOrders = store.orders.length;
+  const revenue = store.orders.filter(o=>o.status!=='cancelled').reduce((s,o)=>s+o.total,0);
+  document.getElementById('statGrid').innerHTML = `
+    <div class="stat"><div class="stat-icon">📦</div><div class="num">${totalProducts}</div><div class="label">Total Products</div></div>
+    <div class="stat"><div class="stat-icon">🧾</div><div class="num">${totalOrders}</div><div class="label">Total Orders</div></div>
+    <div class="stat"><div class="stat-icon">💰</div><div class="num">${revenue}</div><div class="label">Revenue (ETB)</div></div>
+  `;
 }
 
 function render(){
   const c = document.getElementById('content');
-  if(activeTab==='overview') c.innerHTML = overviewHtml();
-  else if(activeTab==='products') c.innerHTML = productsHtml();
+  if(activeTab==='products') c.innerHTML = productsHtml();
   else if(activeTab==='addProduct') c.innerHTML = addProductHtml();
   else if(activeTab==='bulk') c.innerHTML = bulkImportHtml();
   else if(activeTab==='categories') c.innerHTML = categoriesHtml();
   else if(activeTab==='orders') c.innerHTML = ordersHtml();
   else if(activeTab==='settings') c.innerHTML = settingsHtml();
-}
-
-// ---- Overview ----
-function overviewHtml(){
-  const totalProducts = store.products.length;
-  const totalOrders = store.orders.length;
-  const revenue = store.orders.filter(o=>o.status!=='cancelled').reduce((s,o)=>s+o.total,0);
-  return `
-    <div class="stat-grid">
-      <div class="stat"><div class="stat-icon">📦</div><div class="num">${totalProducts}</div><div class="label">Total Products</div></div>
-      <div class="stat"><div class="stat-icon">🧾</div><div class="num">${totalOrders}</div><div class="label">Total Orders</div></div>
-      <div class="stat"><div class="stat-icon">💰</div><div class="num">${revenue} ETB</div><div class="label">Total Revenue</div></div>
-    </div>
-    <div class="card"><div class="row"><strong>Recent Orders</strong></div></div>
-    ${store.orders.slice(0,5).map(orderRowHtml).join('') || '<div class="card">No orders yet.</div>'}
-  `;
 }
 
 // ---- Products ----
