@@ -6,7 +6,7 @@
 <title>hEY! Admin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css"> 
 </head>
 <body>
 
@@ -103,14 +103,19 @@ function normalizeStore(s){
 }
 
 async function persist(){
-  const res = await fetch(`${API_BASE}/api/admin/store`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ initData: tg?.initData || '', store })
-  });
-  const data = await res.json();
-  if(!data.ok) showToast('Save failed — try again');
-  renderStats();
-  return data.ok;
+  try{
+    const res = await fetch(`${API_BASE}/api/admin/store`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ initData: tg?.initData || '', store })
+    });
+    const data = await res.json();
+    if(!data.ok) showToast(data.error ? `Save failed: ${data.error}` : `Save failed (status ${res.status})`);
+    renderStats();
+    return data.ok;
+  }catch(e){
+    showToast(`Save failed: ${e.message}`);
+    return false;
+  }
 }
 
 function switchTab(tab){
@@ -433,7 +438,7 @@ function closeSheet(){ document.getElementById('sheetOverlay').classList.remove(
 function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg; t.style.display='block';
-  clearTimeout(window._t); window._t = setTimeout(()=>{t.style.display='none';}, 2000);
+  clearTimeout(window._t); window._t = setTimeout(()=>{t.style.display='none';}, 4000);
 }
 </script>
 </body>
