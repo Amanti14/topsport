@@ -7,7 +7,6 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-  
 </head>
 <body>
 
@@ -27,6 +26,7 @@
       <nav class="side-nav">
         <div class="side-link active" data-tab="overview" onclick="switchTab('overview')"><span class="side-icon">📊</span>Overview</div>
         <div class="side-link" data-tab="products" onclick="switchTab('products')"><span class="side-icon">📦</span>Products</div>
+        <div class="side-link" data-tab="addProduct" onclick="switchTab('addProduct')"><span class="side-icon">➕</span>Add Product</div>
         <div class="side-link" data-tab="bulk" onclick="switchTab('bulk')"><span class="side-icon">⬆️</span>Bulk Import</div>
         <div class="side-link" data-tab="categories" onclick="switchTab('categories')"><span class="side-icon">🏷️</span>Categories</div>
         <div class="side-link" data-tab="orders" onclick="switchTab('orders')"><span class="side-icon">🧾</span>Orders</div>
@@ -43,6 +43,7 @@
       <div class="tabs mobile-only">
         <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
         <div class="tab" data-tab="products" onclick="switchTab('products')">Products</div>
+        <div class="tab" data-tab="addProduct" onclick="switchTab('addProduct')">+ Add Product</div>
         <div class="tab" data-tab="bulk" onclick="switchTab('bulk')">Bulk Import</div>
         <div class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</div>
         <div class="tab" data-tab="orders" onclick="switchTab('orders')">Orders</div>
@@ -52,7 +53,6 @@
       <div class="content" id="content"></div>
     </div>
   </div>
-  <button class="fab" id="fab" style="display:none;" onclick="openProductForm()">+</button>
 </div>
 
 <div class="sheet-overlay" id="sheetOverlay" onclick="closeSheet()"></div>
@@ -112,7 +112,6 @@ function switchTab(tab){
   activeTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   document.querySelectorAll('.side-link').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
-  document.getElementById('fab').style.display = (tab==='products') ? 'block' : 'none';
   render();
 }
 
@@ -120,6 +119,7 @@ function render(){
   const c = document.getElementById('content');
   if(activeTab==='overview') c.innerHTML = overviewHtml();
   else if(activeTab==='products') c.innerHTML = productsHtml();
+  else if(activeTab==='addProduct') c.innerHTML = addProductHtml();
   else if(activeTab==='bulk') c.innerHTML = bulkImportHtml();
   else if(activeTab==='categories') c.innerHTML = categoriesHtml();
   else if(activeTab==='orders') c.innerHTML = ordersHtml();
@@ -129,15 +129,13 @@ function render(){
 // ---- Overview ----
 function overviewHtml(){
   const totalProducts = store.products.length;
-  const lowStock = store.products.filter(p=>p.stock<=3).length;
-  const pendingOrders = store.orders.filter(o=>o.status==='pending').length;
+  const totalOrders = store.orders.length;
   const revenue = store.orders.filter(o=>o.status!=='cancelled').reduce((s,o)=>s+o.total,0);
   return `
     <div class="stat-grid">
-      <div class="stat"><div class="stat-icon">📦</div><div class="num">${totalProducts}</div><div class="label">Products</div></div>
-      <div class="stat"><div class="stat-icon">🧾</div><div class="num">${pendingOrders}</div><div class="label">Pending Orders</div></div>
-      <div class="stat"><div class="stat-icon">⚠️</div><div class="num">${lowStock}</div><div class="label">Low Stock (≤3)</div></div>
-      <div class="stat"><div class="stat-icon">💰</div><div class="num">${revenue}</div><div class="label">Total Revenue (ETB)</div></div>
+      <div class="stat"><div class="stat-icon">📦</div><div class="num">${totalProducts}</div><div class="label">Total Products</div></div>
+      <div class="stat"><div class="stat-icon">🧾</div><div class="num">${totalOrders}</div><div class="label">Total Orders</div></div>
+      <div class="stat"><div class="stat-icon">💰</div><div class="num">${revenue} ETB</div><div class="label">Total Revenue</div></div>
     </div>
     <div class="card"><div class="row"><strong>Recent Orders</strong></div></div>
     ${store.orders.slice(0,5).map(orderRowHtml).join('') || '<div class="card">No orders yet.</div>'}
@@ -161,6 +159,46 @@ function productsHtml(){
     </div>`).join('');
 }
 function categoryName(id){ return store.categories.find(c=>c.id===id)?.name || '—'; }
+
+// ---- Add Product (dedicated page, matches the requested layout) ----
+function addProductHtml(){
+  const catOptions = `<option value="">Select a category</option>` +
+    store.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  return `
+    <div class="card">
+      <div class="sheet-title" style="font-size:16px;">Add Product</div>
+      <div class="field-row">
+        <div class="field"><label>Product Name *</label><input id="apName" placeholder="e.g., PS5 Console"></div>
+        <div class="field"><label>Category *</label><select id="apCat">${catOptions}</select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Price (ETB) *</label><input id="apPrice" type="number" placeholder="99.99"></div>
+        <div class="field"><label>Stock Quantity *</label><input id="apStock" type="number" placeholder="10"></div>
+      </div>
+      <div class="field"><label>Description</label><textarea id="apDesc" rows="3" placeholder="Product description..."></textarea></div>
+      <div class="field"><label>Image URL</label><input id="apImage" placeholder="https://example.com/image.jpg"></div>
+      <button class="btn-primary" onclick="createProductInline()">✨ Create Product</button>
+    </div>`;
+}
+async function createProductInline(){
+  const name = document.getElementById('apName').value.trim();
+  const categoryId = document.getElementById('apCat').value;
+  const price = Number(document.getElementById('apPrice').value);
+  const stock = Number(document.getElementById('apStock').value);
+  const description = document.getElementById('apDesc').value.trim();
+  const image = document.getElementById('apImage').value.trim();
+
+  if(!name || !categoryId || !price || !stock){
+    showToast('Please fill in Product Name, Category, Price and Stock');
+    return;
+  }
+  store.products.push({ id: 'p_'+Date.now(), name, categoryId, price, stock, image, description });
+  const ok = await persist();
+  if(ok){
+    switchTab('products');
+    showToast('Product created');
+  }
+}
 
 // ---- Bulk Import ----
 let bulkParsed = [];
