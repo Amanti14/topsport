@@ -6,7 +6,7 @@
 <title>hEY! Admin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css"> 
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
@@ -31,6 +31,7 @@
     <div class="tab active" data-tab="products" onclick="switchTab('products')">📦 Products</div>
     <div class="tab" data-tab="addProduct" onclick="switchTab('addProduct')">➕ Add Product</div>
     <div class="tab" data-tab="orders" onclick="switchTab('orders')">🧾 Orders</div>
+    <div class="tab" data-tab="customers" onclick="switchTab('customers')">👥 Customers</div>
     <div class="tab" data-tab="bulk" onclick="switchTab('bulk')">⬆️ Bulk Import</div>
     <div class="tab" data-tab="categories" onclick="switchTab('categories')">🏷️ Categories</div>
     <div class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ Store</div>
@@ -78,8 +79,16 @@ init();
 
 async function loadStore(){
   try{
-    const res = await fetch(`${API_BASE}/api/store`);
-    store = normalizeStore(await res.json());
+    const res = await fetch(`${API_BASE}/api/admin/store/load`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ initData: tg?.initData || '' })
+    });
+    const data = await res.json();
+    if(!data.ok){
+      document.getElementById('content').innerHTML = `<div class="card" style="border-color:var(--danger);">Couldn't load store data: ${data.error || 'unknown error'}</div>`;
+      return;
+    }
+    store = normalizeStore(data.store);
     renderStats();
     render();
   }catch(e){
@@ -97,6 +106,7 @@ function normalizeStore(s){
     categories: Array.isArray(s.categories) ? s.categories : [],
     products: Array.isArray(s.products) ? s.products : [],
     orders: Array.isArray(s.orders) ? s.orders : [],
+    customers: s.customers && typeof s.customers === 'object' ? s.customers : {},
     payment: { methods: Array.isArray(s.payment?.methods) ? s.payment.methods : [] },
     shipping: { options: Array.isArray(s.shipping?.options) ? s.shipping.options : [] },
   };
@@ -143,6 +153,7 @@ function render(){
     else if(activeTab==='bulk') c.innerHTML = bulkImportHtml();
     else if(activeTab==='categories') c.innerHTML = categoriesHtml();
     else if(activeTab==='orders') c.innerHTML = ordersHtml();
+    else if(activeTab==='customers') c.innerHTML = customersHtml();
     else if(activeTab==='settings') c.innerHTML = settingsHtml();
   }catch(e){
     c.innerHTML = `<div class="card" style="border-color:var(--danger);">Something went wrong loading this tab: ${e.message}</div>`;
@@ -404,6 +415,93 @@ async function updateOrderStatus(id){
   o.status = document.getElementById('ordStatus').value;
   const ok = await persist();
   if(ok){ closeSheet(); render(); showToast('Order updated'); }
+}
+
+// ---- Customers ----
+function timeAgo(iso){
+  if(!iso) return 'never';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if(mins < 1) return 'just now';
+  if(mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if(hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function cartValue(cart){
+  return (cart||[]).reduce((sum,i)=>{
+    const p = store.products.find(x=>x.id===i.productId);
+    return sum + (p ? p.price * i.qty : 0);
+  }, 0);
+}
+
+function customersHtml(){
+  const list = Object.entries(store.customers || {})
+    .map(([id, record]) => ({ id, ...record }))
+    .sort((a,b) => new Date(b.lastActiveAt||0) - new Date(a.lastActiveAt||0));
+
+  if(list.length === 0){
+    return `<div class="card">No one has signed in with Telegram yet. As customers choose "Continue with Telegram" in the store, they'll show up here.</div>`;
+  }
+
+  return list.map(c => {
+    const t = c.telegram || {};
+    const name = [t.first_name, t.last_name].filter(Boolean).join(' ') || c.savedInfo?.name || 'Unknown';
+    const avatar = t.photo_url ? `<img src="${t.photo_url}">` : `<div class="noimg">👤</div>`;
+    const cart = c.cart || [];
+    const cartRows = cart.map(i => {
+      const p = store.products.find(x=>x.id===i.productId);
+      return `<div class="row" style="font-size:12px;padding:3px 0;"><span>${p ? p.name : 'Unknown item'} x${i.qty}</span><span>${p ? p.price*i.qty : 0} ETB</span></div>`;
+    }).join('');
+
+    return `<div class="card">
+      <div class="prod-row" style="align-items:flex-start;">
+        ${avatar}
+        <div class="prod-info">
+          <div class="prod-name">${name}</div>
+          <div class="prod-meta">${t.username ? '@'+t.username : 'no username'} · active ${timeAgo(c.lastActiveAt)}</div>
+          ${c.savedInfo?.phone ? `<div class="prod-meta">📞 ${c.savedInfo.phone}</div>` : ''}
+        </div>
+        <button class="icon-sm" onclick="openDmModal('${c.id}')">💬</button>
+      </div>
+      ${cart.length > 0 ? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+          <div style="font-size:11.5px;font-weight:700;color:var(--text-soft);margin-bottom:4px;">🛒 CURRENT CART (${cartValue(cart)} ETB)</div>
+          ${cartRows}
+        </div>` : `<div style="margin-top:8px;font-size:11.5px;color:var(--text-soft);">Cart is empty</div>`
+      }
+    </div>`;
+  }).join('');
+}
+
+function openDmModal(customerId){
+  const c = store.customers[customerId];
+  const t = c?.telegram || {};
+  const name = [t.first_name, t.last_name].filter(Boolean).join(' ') || 'this customer';
+  document.getElementById('sheetContent').innerHTML = `
+    <div class="sheet-body">
+      <div class="sheet-title">Message ${name}</div>
+      <div class="field"><textarea id="dmText" rows="4" placeholder="Type your message..."></textarea></div>
+      <button class="btn-primary" onclick="sendDm('${customerId}')">Send Message</button>
+    </div>`;
+  openSheet();
+}
+
+async function sendDm(customerId){
+  const message = document.getElementById('dmText').value.trim();
+  if(!message){ showToast('Type a message first'); return; }
+  try{
+    const res = await fetch(`${API_BASE}/api/admin/dm`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ initData: tg?.initData || '', telegramUserId: Number(customerId), message })
+    });
+    const data = await res.json();
+    if(data.ok){ closeSheet(); showToast('Message sent ✓'); }
+    else showToast(data.error || 'Could not send message');
+  }catch(e){
+    showToast('Network error — please try again');
+  }
 }
 
 // ---- Settings ----
