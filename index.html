@@ -7,7 +7,6 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-
 </head>
 <body>
 
@@ -29,8 +28,7 @@
   <div class="stat-grid" id="statGrid"></div>
 
   <div class="tabs">
-    <div class="tab active" data-tab="analytics" onclick="switchTab('analytics')">📊 Analytics</div>
-    <div class="tab" data-tab="products" onclick="switchTab('products')">📦 Products</div>
+    <div class="tab active" data-tab="products" onclick="switchTab('products')">📦 Products</div>
     <div class="tab" data-tab="addProduct" onclick="switchTab('addProduct')">➕ Add Product</div>
     <div class="tab" data-tab="orders" onclick="switchTab('orders')">🧾 Orders</div>
     <div class="tab" data-tab="customers" onclick="switchTab('customers')">👥 Customers</div>
@@ -459,7 +457,7 @@ function customersHtml(){
       return `<div class="row" style="font-size:12px;padding:3px 0;"><span>${p ? p.name : 'Unknown item'} x${i.qty}</span><span>${p ? p.price*i.qty : 0} ETB</span></div>`;
     }).join('');
 
-    return `<div class="card">
+    return `<div class="card" onclick="openCustomerDetail('${c.id}')" style="cursor:pointer;">
       <div class="prod-row" style="align-items:flex-start;">
         ${avatar}
         <div class="prod-info">
@@ -467,7 +465,7 @@ function customersHtml(){
           <div class="prod-meta">${t.username ? '@'+t.username : 'no username'} · active ${timeAgo(c.lastActiveAt)}</div>
           ${c.savedInfo?.phone ? `<div class="prod-meta">📞 ${c.savedInfo.phone}</div>` : ''}
         </div>
-        <button class="icon-sm" onclick="openDmModal('${c.id}')">💬</button>
+        <button class="icon-sm" onclick="event.stopPropagation(); openDmModal('${c.id}')">💬</button>
       </div>
       ${cart.length > 0 ? `
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
@@ -477,6 +475,77 @@ function customersHtml(){
       }
     </div>`;
   }).join('');
+}
+
+function customerTier(spend){
+  if(spend >= 50000) return { label:'Platinum', cls:'tier-platinum', icon:'💎', next:null, nextAt:null };
+  if(spend >= 20000) return { label:'Gold', cls:'tier-gold', icon:'🥇', next:'Platinum', nextAt:50000 };
+  if(spend >= 5000) return { label:'Silver', cls:'tier-silver', icon:'🥈', next:'Gold', nextAt:20000 };
+  return { label:'Bronze', cls:'tier-bronze', icon:'🥉', next:'Silver', nextAt:5000 };
+}
+
+function openCustomerDetail(customerId){
+  const c = store.customers[customerId];
+  if(!c) return;
+  const t = c.telegram || {};
+  const name = [t.first_name, t.last_name].filter(Boolean).join(' ') || c.savedInfo?.name || 'Unknown';
+  const avatar = t.photo_url ? `<img src="${t.photo_url}">` : `<div class="noimg">👤</div>`;
+
+  const myOrders = (store.orders||[]).filter(o => o.telegramUserId === Number(customerId));
+  const nonCancelled = myOrders.filter(o => o.status !== 'cancelled');
+  const totalSpent = nonCancelled.reduce((s,o)=>s+o.total,0);
+  const avgOrder = nonCancelled.length ? Math.round(totalSpent/nonCancelled.length) : 0;
+  const tier = customerTier(totalSpent);
+  const tierProgress = tier.nextAt ? Math.min(100, Math.round((totalSpent/tier.nextAt)*100)) : 100;
+
+  const ordersHtml = myOrders.length === 0 ? `<div class="empty-orders">No orders yet</div>` :
+    myOrders.slice(0,8).map(o => `<div class="order-card">
+      <div class="order-card-top"><span class="status-pill status-${o.status}">${o.status}</span><span class="order-total">${o.total} ETB</span></div>
+      <div class="order-meta">${o.items.length} item(s) · ${new Date(o.createdAt).toLocaleDateString()}</div>
+    </div>`).join('');
+
+  document.getElementById('sheetContent').innerHTML = `
+    <div class="sheet-body">
+      <div class="prod-row" style="margin-bottom:16px;">
+        ${avatar}
+        <div class="prod-info">
+          <div class="sheet-title" style="margin-bottom:2px;">${name}</div>
+          <div class="prod-meta">${t.username ? '@'+t.username : 'no username'} · active ${timeAgo(c.lastActiveAt)}</div>
+        </div>
+      </div>
+
+      <span class="tier-badge ${tier.cls}">${tier.icon} ${tier.label} Member</span>
+      ${tier.next ? `
+        <div style="margin:8px 0 16px;">
+          <div class="bar-track" style="height:6px;"><div class="bar-fill" style="width:${tierProgress}%;"></div></div>
+          <div style="font-size:10.5px;color:var(--text-soft);margin-top:4px;">${Math.max(0,tier.nextAt-totalSpent)} ETB until ${tier.next}</div>
+        </div>` : `<div style="margin:8px 0 16px;font-size:10.5px;color:var(--text-soft);">Highest tier reached 🎉</div>`
+      }
+
+      <div class="stat-grid" style="margin:0 0 16px;">
+        <div class="stat"><div class="num">${myOrders.length}</div><div class="label">Orders</div></div>
+        <div class="stat"><div class="num">${totalSpent}</div><div class="label">Total Spent</div></div>
+        <div class="stat"><div class="num">${avgOrder}</div><div class="label">Avg Order</div></div>
+      </div>
+
+      <div class="profile-section-title" style="margin-top:4px;">Order History</div>
+      ${ordersHtml}
+
+      <div class="profile-section-title">Admin Notes</div>
+      <div class="field">
+        <textarea id="adminNoteText" rows="3" placeholder="e.g. Prefers Telebirr, asked about restock dates...">${c.adminNote || ''}</textarea>
+      </div>
+      <button class="btn-primary" onclick="saveAdminNote('${customerId}')">Save Note</button>
+      <button class="btn-primary" style="background:var(--surface);color:var(--primary);margin-top:8px;" onclick="openDmModal('${customerId}')">💬 Message ${name.split(' ')[0]}</button>
+    </div>`;
+  openSheet();
+}
+
+async function saveAdminNote(customerId){
+  const note = document.getElementById('adminNoteText').value.trim();
+  store.customers[customerId].adminNote = note;
+  const ok = await persist();
+  if(ok) showToast('Note saved');
 }
 
 function openDmModal(customerId){
