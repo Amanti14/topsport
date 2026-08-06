@@ -1,4 +1,4 @@
-:root{
+ :root{
     --primary:#179BD9; --primary-dark:#1180B3; --bg:#FFFFFF; --surface:#F4FAFD;
     --text:#0F2A3D; --text-soft:#6C8A9C; --border:#E4EFF4; --radius:16px;
     --danger:#D9534F; --success:#3CB878;
@@ -61,6 +61,13 @@
   .status-delivered{background:#DCEEFA;color:#1180B3;}
   .status-cancelled{background:#FBE0DE;color:#B5342E;}
 
+  .profile-section-title{font-size:13.5px;font-weight:700;margin:18px 0 10px;}
+  .order-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:7px;}
+  .order-card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;}
+  .order-meta{font-size:11px;color:var(--text-soft);}
+  .order-total{font-weight:800;color:var(--primary);font-size:12.5px;}
+  .empty-orders{text-align:center;padding:20px 10px;color:var(--text-soft);font-size:12.5px;}
+
   .lock-screen{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:1000;text-align:center;padding:20px;}
   code{background:var(--surface);padding:2px 6px;border-radius:6px;font-family:monospace;}
 
@@ -89,6 +96,11 @@
   .tier-chip{flex:1;min-width:70px;text-align:center;padding:10px 6px;border-radius:12px;}
   .tier-chip .num{font-size:16px;font-weight:800;}
   .tier-chip .lbl{font-size:9.5px;margin-top:2px;}
+  .tier-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;}
+  .tier-bronze{background:#F3E3D3;color:#8A5A2B;}
+  .tier-silver{background:#E4E9EE;color:#5A6572;}
+  .tier-gold{background:#FCEFC7;color:#8A6D1F;}
+  .tier-platinum{background:linear-gradient(90deg,#D9E8FF,#F0E4FF);color:#4B4B9E;}
 
   .rank-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
   .rank-row:last-child{border-bottom:none;}
