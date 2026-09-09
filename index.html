@@ -1288,7 +1288,16 @@ let selectedPayment='cbe';
 let shopState={leagueId:'all',teamId:null,kitFilter:'all'};
 let modalCtx=null;
 
-function save(){ localStorage.setItem('topsport_cfg',JSON.stringify(cfg)); if(hasCloudSync()) pushCloudConfig(false); }
+// Pushes are chained (not fired concurrently) so that when a flow calls save() twice in
+// quick succession — e.g. "Add Kit" saves once for the blank kit, then again once you fill
+// in details — the second push always starts only after the first has finished. That
+// guarantees they land on the server in the right order, so a slow first request can never
+// arrive after (and overwrite) the good final one.
+let _pushChain=Promise.resolve();
+function save(){
+  localStorage.setItem('topsport_cfg',JSON.stringify(cfg));
+  if(hasCloudSync()) _pushChain=_pushChain.then(()=>pushCloudConfig(false)).catch(()=>{});
+}
 function saveOrders(){ localStorage.setItem('topsport_orders',JSON.stringify(orderHistory)); }
 function fmt(n){ return cfg.currencyPos==='after'?n.toLocaleString()+' '+cfg.currency:cfg.currency+' '+n.toLocaleString(); }
 function isOwner(){ if(!tgUser) return false; return OWNER_IDS.includes(String(tgUser.id)); }
@@ -1305,7 +1314,14 @@ async function initLogin(){
   document.getElementById('login-brand-name').innerHTML=`${cfg.brandName1||'Top'}<span>${cfg.brandName2||'Sport'}</span>`;
   document.getElementById('login-tagline').textContent=cfg.storeSub||'Official Football Jerseys';
   const remote=await fetchCloudConfig();
-  if(remote){ applyRemoteConfig(remote); }
+  // Only accept the cloud copy if it's actually newer than what we already have locally.
+  // Without this check, a reload right after a local edit (before the push has landed,
+  // or if it lost a race with another push) would silently pull back stale cloud data
+  // and stomp the edit you just made.
+  if(remote && (remote._lastUpdated||0) > (cfg._lastUpdated||0)){
+    applyRemoteConfig(remote);
+    _lastKnownRemoteTs=remote._lastUpdated||0;
+  }
   function tryTelegram(){
     try{
       const tg=window.Telegram?.WebApp;
