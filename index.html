@@ -784,6 +784,13 @@ function applyDeletedProducts(c){
 function nextProductId(){
   let max=100;
   cfg.leagues.forEach(lg=>(lg.teams||[]).forEach(t=>(t.products||[]).forEach(p=>{ if(p.id>max) max=p.id; })));
+  // Deleted products are removed from the array but their IDs stay tombstoned in
+  // deletedProductIds forever (so defaults can't resurrect them). If we only looked at IDs
+  // still present in the array, deleting the current highest-ID product would let a brand
+  // new kit get that same ID reissued — and applyDeletedProducts() would then strip the new
+  // kit out on the next reload/merge because its ID matches a tombstone. Factor tombstoned
+  // IDs into the max so a freed number is never handed out again.
+  (cfg.deletedProductIds||[]).forEach(id=>{ if(id>max) max=id; });
   return max+1;
 }
 function addProduct(lgId,teamId){
